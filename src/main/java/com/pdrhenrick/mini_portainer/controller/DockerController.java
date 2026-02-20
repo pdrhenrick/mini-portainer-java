@@ -1,41 +1,54 @@
 package com.pdrhenrick.mini_portainer.controller;
 
-import com.github.dockerjava.api.DockerClient;
-import com.github.dockerjava.api.model.Container;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
-
+import com.pdrhenrick.mini_portainer.entity.DockerLog;
+import com.pdrhenrick.mini_portainer.service.DockerService;
+import org.springframework.web.bind.annotation.*;
 import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.stream.Collectors;
 
+// IMPORTANTE: Liberamos tanto localhost quanto o IP 127.0.0.1 para matar o erro 403
+@CrossOrigin(origins = {"http://localhost:5173", "http://127.0.0.1:5173"})
 @RestController
 @RequestMapping("/api/docker")
 public class DockerController {
 
-    private final DockerClient dockerClient;
+    private final DockerService dockerService;
 
-    // Injeção de Dependência: O Spring entrega o cliente pronto aqui
-    public DockerController(DockerClient dockerClient) {
-        this.dockerClient = dockerClient;
+    public DockerController(DockerService dockerService) {
+        this.dockerService = dockerService;
     }
 
     @GetMapping("/containers")
-    public List<Container> listContainers() {
-        // Comando equivalente ao "docker ps -a"
-        return dockerClient.listContainersCmd()
-                .withShowAll(true) 
-                .exec();
+    public List<Map<String, Object>> listContainers() {
+        // Transformamos o objeto complexo do Docker em um Map simples 
+        // Isso resolve o erro "HttpMessageNotWritableException" que apareceu no seu log
+        return dockerService.listAllContainers().stream().map(c -> {
+            Map<String, Object> map = new HashMap<>();
+            map.put("id", c.getId());
+            map.put("names", c.getNames());
+            map.put("status", c.getStatus());
+            map.put("state", c.getState());
+            map.put("image", c.getImage());
+            return map;
+        }).collect(Collectors.toList());
     }
-@GetMapping("/start/{id}")
+
+    @GetMapping("/start/{id}")
     public String startContainer(@PathVariable String id) {
-        dockerClient.startContainerCmd(id).exec();
-        return "Container " + id + " iniciado com sucesso!";
+        dockerService.startContainer(id);
+        return "Container " + id + " iniciado!";
     }
 
     @GetMapping("/stop/{id}")
     public String stopContainer(@PathVariable String id) {
-        dockerClient.stopContainerCmd(id).exec();
-        return "Container " + id + " parado com sucesso!";
+        dockerService.stopContainer(id);
+        return "Container " + id + " parado!";
+    }
+    
+    @GetMapping("/logs")
+    public List<DockerLog> getLogs() {
+        return dockerService.getAllLogs();
     }
 }
